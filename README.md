@@ -2,6 +2,7 @@
 proxy server with QT creator
 ##
 Set the 
-"""
+""" python
+
 exePath = "your path here"
 """ 
