@@ -4,6 +4,7 @@
 #include <deque>
 #include <fstream>
 #include <iostream>
+#include <set>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -29,13 +30,14 @@ HWND hDrawbox, hTextbox3, hTextbox1, hTextbox2, hSearchBar, hButtonAdd, hButtonS
 unordered_map<string, bool> addedStrings;
 string stringBan = ""; // Danh sách các trang web bị chặn
 stringstream output;
-vector<pair<string, string>> user_ban_list;                                           // Biến lưu trữ dữ liệu để ghi vào file server.txt
-int byteReceived = 0;                                                                 // Biến lưu trữ số byte nhận được
-int byteSent = 0;                                                                     // Biến lưu trữ số byte gửi đi
-int pivot = 0;                                                                        // Biến lưu trữ vị trí của dòng cuối cùng trong file server.txt
-vector<string> ban_list;                                                              // Danh sách các trang web bị chặn
-unordered_map<string, string> IPv4ConnectToDomain;                                    // Lưu trữ địa chỉ IP của domain
-int ClientOut = 0;                                                                    // Số client đã ngắt kết nối
+vector<pair<string, string>> user_ban_list;        // Biến lưu trữ dữ liệu để ghi vào file server.txt
+int byteReceived = 0;                              // Biến lưu trữ số byte nhận được
+int byteSent = 0;                                  // Biến lưu trữ số byte gửi đi
+int pivot = 0;                                     // Biến lưu trữ vị trí của dòng cuối cùng trong file server.txt
+vector<string> ban_list;                           // Danh sách các trang web bị chặn
+unordered_map<string, string> IPv4ConnectToDomain; // Lưu trữ địa chỉ IP của domain
+int ClientOut = 0;
+set<string> user_list;                                                                // Số client đã ngắt kết nối
 SOCKET proxySocket;                                                                   // Socket của proxy server
 deque<int> DataDisplayQueue = {12354, 50463, 24653, 42361, 62346, 10350, 2314, 5493}; // Queue lưu trữ số byte nhận được và gửi đi
 int maxData = 1000;
@@ -67,6 +69,8 @@ void printReceivedAndSentBytes() {
         string text = "Received: " + to_string(received) + " bytes/s\r\nSent: " + to_string(sent) + " bytes/s\r\n" + "Number of Opening port: " + to_string((threads.size() - 1 - ClientOut) > 0 ? 1 : threads.size() - 1 - ClientOut) + " clients\r\n";
         SendMessage(hTextbox4, EM_SETSEL, 0, -1);
         SendMessage(hTextbox4, EM_REPLACESEL, FALSE, (LPARAM)text.c_str());
+        string thongke = "Number of user " + to_string(user_list.size());
+        SendMessage(hTextbox4, EM_REPLACESEL, FALSE, (LPARAM)thongke.c_str());
         byteReceived = 0;
         byteSent = 0;
         now = time(0);
@@ -76,6 +80,8 @@ void printReceivedAndSentBytes() {
     string text = "Received: " + to_string(0) + " bytes/s\r\nSent: " + to_string(0) + " bytes/s\r\n" + "Number of Opening port: " + to_string(0) + " clients\r\n";
     SendMessage(hTextbox4, EM_SETSEL, 0, -1);
     SendMessage(hTextbox4, EM_REPLACESEL, FALSE, (LPARAM)text.c_str());
+    string thongke = "Number of user " + to_string(user_list.size());
+    SendMessage(hTextbox4, EM_REPLACESEL, FALSE, (LPARAM)thongke.c_str());
 }
 
 bool bann(char *hostName) { // Hàm kiểm tra hostName có nằm trong danh sách ban_list không
@@ -99,24 +105,33 @@ bool ban_1_user(char *hostName, char *ip) {
 }
 
 void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu từ client
-    // if (user_ban_list.size() > 0)
-
-    //     cout << user_ban_list[0].first << " " << user_ban_list[0].second << endl;
-    ofstream out("server.txt"); // Mở file server.txt để ghi dữ liệu
-    char buffer[BUFFER_SIZE];   // buffer dùng để chứa dữ liệu
+    ofstream out("server.txt");                    // Mở file server.txt để ghi dữ liệu
+    char buffer[BUFFER_SIZE];                      // buffer dùng để chứa dữ liệu
 
     int bytesRead = recv(clientSocket, buffer, sizeof(buffer) - 1, 0); // Đọc dữ liệu từ clientSocket
-    //---------------------------------------------------------
-    byteReceived += bytesRead;                              // Cập nhật số byte nhận được
-    if (bytesRead <= 0) {                                   // Nếu không đọc được dữ liệu
-        cerr << "Error reading from client socket" << endl; // In ra lỗi
+    byteReceived += bytesRead;                                         // Cập nhật số byte nhận được
+    if (bytesRead <= 0) {                                              // Nếu không đọc được dữ liệu
+        cerr << "Error reading from client socket" << endl;            // In ra lỗi
         closesocket(clientSocket);
         ClientOut++;
         return;
     }
     buffer[bytesRead] = '\0'; // Kết thúc chuỗi buffer
-    // cout << buffer << endl; // In ra dữ liệu đọc được
+    char clientIP[INET_ADDRSTRLEN];
+    // Lấy IP của client
+    sockaddr_in clientAddr;
+    int addrLen = sizeof(clientAddr);
+    if (getpeername(clientSocket, (struct sockaddr *)&clientAddr, &addrLen) == 0) {
+        // Chuyển đổi IP từ dạng nhị phân sang dạng chuỗi
+        inet_ntop(AF_INET, &clientAddr.sin_addr, clientIP, sizeof(clientIP));
+        cout << "Client IP: " << clientIP << endl; // In ra địa chỉ IP của client
+    } else {
+        cerr << "Failed to get client IP" << endl;
+    }
+    string CIP(clientIP);
+    user_list.insert(CIP);
 
+    // Xử lý các dòng dữ liệu từ client
     std::istringstream stream(buffer);
     std::string line, connect_line, host_line, port;
     int line_number = 0;
@@ -137,9 +152,8 @@ void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu 
     }
 
     // Đưa kết quả về 1 văn bản (chuỗi)
-    std::string buff = connect_line + "\r\n"
-                                      "Host: " +
-                       host_line + "\r\n" + "----------------\r\n";
+    std::string buff = connect_line + "\r\n" +
+                       host_line + "\r\n" + "Client IP: " + CIP + "\r\n----------------\r\n";
 
     output << buff << endl;
     int length = output.str().size();
@@ -684,7 +698,7 @@ int main() {
 
     HWND hwnd = CreateWindowW(
         g_szClassName, L"Window with Textboxes and Buttons", WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 1040, 700, NULL, NULL, wc.hInstance, NULL);
+        CW_USEDEFAULT, CW_USEDEFAULT, 1090, 700, NULL, NULL, wc.hInstance, NULL);
 
     if (hwnd == NULL) {
         return 0;
@@ -706,7 +720,7 @@ int main() {
                               2 * margin + 400, 2 * margin + 230 + 50, 325, 220, hwnd, (HMENU)3, wc.hInstance, NULL);
     hTextbox4 = CreateWindowW(L"EDIT", L"",
                               WS_CHILD | WS_VISIBLE | WS_BORDER | ES_MULTILINE | WS_VSCROLL | ES_READONLY,
-                              800 - margin, margin + 50, 200, 150, hwnd, (HMENU)3, wc.hInstance, NULL);
+                              800 - margin, margin + 50, 240, 150, hwnd, (HMENU)3, wc.hInstance, NULL);
     // hTextbox3 = CreateWindowW(L"LISTBOX", L"",
     //                           WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_STANDARD | WS_VSCROLL,
     //                           810 - margin, margin + 200, 200, 300, hwnd, (HMENU)3, wc.hInstance, NULL);
