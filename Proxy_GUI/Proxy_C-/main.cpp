@@ -485,54 +485,54 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
     case WM_COMMAND: {
         // Kiểm tra nếu nút Add (ID của hButtonAdd) được nhấn
-        if ((HWND)lp == hButtonAdd) {
-            // Lấy văn bản từ ô tìm kiếm (hSearchBar)
-            int len = GetWindowTextLength(hSearchBar) + 1;
-            char *text = new char[len];
-            GetWindowTextA(hSearchBar, text, len);
-            SetWindowTextA(hSearchBar, "");
+        // if ((HWND)lp == hButtonAdd) {
+        //     // Lấy văn bản từ ô tìm kiếm (hSearchBar)
+        //     int len = GetWindowTextLength(hSearchBar) + 1;
+        //     char *text = new char[len];
+        //     GetWindowTextA(hSearchBar, text, len);
+        //     SetWindowTextA(hSearchBar, "");
 
-            // Kiểm tra xem văn bản đã tồn tại trong unordered_map chưa
-            string textStr = text;
-            if (addedStrings.find(textStr) == addedStrings.end()) {
-                // Nếu chưa tồn tại, thêm vào unordered_map và vào ban_list
-                addedStrings[textStr] = true;
-                ban_list.push_back(textStr);
-                // Thêm văn bản vào ListBox (hTextbox3)
-                SendMessage(hTextbox3, LB_ADDSTRING, 0, (LPARAM)textStr.c_str());
+        //     // Kiểm tra xem văn bản đã tồn tại trong unordered_map chưa
+        //     string textStr = text;
+        //     if (addedStrings.find(textStr) == addedStrings.end()) {
+        //         // Nếu chưa tồn tại, thêm vào unordered_map và vào ban_list
+        //         addedStrings[textStr] = true;
+        //         ban_list.push_back(textStr);
+        //         // Thêm văn bản vào ListBox (hTextbox3)
+        //         SendMessage(hTextbox3, LB_ADDSTRING, 0, (LPARAM)textStr.c_str());
 
-                // Giải phóng bộ nhớ đã cấp phát
-                delete[] text;
-            } else {
-                // Nếu văn bản đã tồn tại trong unordered_map, không làm gì cả
-                delete[] text;
-            }
-        }
+        //         // Giải phóng bộ nhớ đã cấp phát
+        //         delete[] text;
+        //     } else {
+        //         // Nếu văn bản đã tồn tại trong unordered_map, không làm gì cả
+        //         delete[] text;
+        //     }
+        // }
 
-        if ((HWND)lp == hButtonRemove) {
-            // Lấy dòng được chọn trong ListBox và xóa nó
-            int selectedIndex = SendMessage(hTextbox3, LB_GETCURSEL, 0, 0);
-            if (selectedIndex != LB_ERR) {
-                // Lấy văn bản của item được chọn từ ListBox để cập nhật danh sách
-                int textLen = SendMessage(hTextbox3, LB_GETTEXTLEN, selectedIndex, 0);
-                char *selectedText = new char[textLen + 1];
-                SendMessage(hTextbox3, LB_GETTEXT, selectedIndex, (LPARAM)selectedText);
+        // if ((HWND)lp == hButtonRemove) {
+        //     // Lấy dòng được chọn trong ListBox và xóa nó
+        //     int selectedIndex = SendMessage(hTextbox3, LB_GETCURSEL, 0, 0);
+        //     if (selectedIndex != LB_ERR) {
+        //         // Lấy văn bản của item được chọn từ ListBox để cập nhật danh sách
+        //         int textLen = SendMessage(hTextbox3, LB_GETTEXTLEN, selectedIndex, 0);
+        //         char *selectedText = new char[textLen + 1];
+        //         SendMessage(hTextbox3, LB_GETTEXT, selectedIndex, (LPARAM)selectedText);
 
-                // Xóa item đã chọn từ ListBox
-                SendMessage(hTextbox3, LB_DELETESTRING, selectedIndex, 0);
+        //         // Xóa item đã chọn từ ListBox
+        //         SendMessage(hTextbox3, LB_DELETESTRING, selectedIndex, 0);
 
-                // Cập nhật lại danh sách ban_list và addedStrings
-                string itemToRemove = selectedText;
-                addedStrings.erase(itemToRemove);
-                auto it = find(ban_list.begin(), ban_list.end(), itemToRemove);
-                if (it != ban_list.end()) {
-                    ban_list.erase(it);
-                }
+        //         // Cập nhật lại danh sách ban_list và addedStrings
+        //         string itemToRemove = selectedText;
+        //         addedStrings.erase(itemToRemove);
+        //         auto it = find(ban_list.begin(), ban_list.end(), itemToRemove);
+        //         if (it != ban_list.end()) {
+        //             ban_list.erase(it);
+        //         }
 
-                // Giải phóng bộ nhớ
-                delete[] selectedText;
-            }
-        }
+        //         // Giải phóng bộ nhớ
+        //         delete[] selectedText;
+        //     }
+        // }
         if ((HWND)lp == hButtonStart) {
             FLAG = true;
             // cout<<threads.size()<<endl;
@@ -636,6 +636,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             UpdateWindow(hTextbox2);
         }
         if ((HWND)lp == hButtonUnban) {
+            cout << HWND(lp) << endl;
             // Lấy chỉ số mục được chọn trong ListBox
             int selectedIndex = (int)SendMessage(hTextbox2, LB_GETCURSEL, 0, 0);
 
@@ -652,8 +653,13 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SendMessage(hTextbox2, LB_GETTEXT, selectedIndex, (LPARAM)selectedText);
 
             // Xóa item đã chọn từ ListBox
-            SendMessage(hTextbox2, LB_DELETESTRING, selectedIndex, 0);
+            if (LB_ERR == SendMessage(hTextbox2, LB_DELETESTRING, selectedIndex, 0) ) {
+                std::cout << "Error deleting item from ListBox!" << std::endl;
+                break;
+            }
+           
             //InvalidateRect(hTextbox2, NULL, TRUE);
+            UpdateWindow(hTextbox2);
             string itemToRemove = selectedText;
             // Phân tách chuỗi
             string part1, part2;
