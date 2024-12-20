@@ -4,13 +4,14 @@
 #include <deque>
 #include <fstream>
 #include <iostream>
+#include <set>
 #include <sstream>
 #include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
-#include <winsock2.h>
 #include <windows.h>
+#include <winsock2.h>
 #include <ws2tcpip.h>
 
 #pragma comment(lib, "ws2_32.lib")
@@ -21,25 +22,34 @@ using namespace std;
 #define IP_ADDRESS "0.0.0.0"
 
 // Global variables
-bool FLAG = true;                                                                                                                                                                                                         // Biến kiểm tra việc chạy proxy server
-time_t now = time(0);                                                                                                                                                                                                     // Biến lưu trữ thời gian hiện tại
-vector<thread> threads;                                                                                                                                                                                                   // Vector lưu trữ các thread
-HWND hwnd, hDrawbox, hTextbox3, hTextbox1, hTextbox2, hSearchBar, hButtonAdd, hButtonStart, hButtonStop, hButtonBan, hButtonUnban, hButtonRemove, hTextbox4, hSearchBar1, hSearchBar2, Log_label, performance, stat, ban_label; // Các control// Khai báo unordered_map để lưu các dòng đã được thêm vào
+bool FLAG = true;                                                                                                                                                                                                                                // Biến kiểm tra việc chạy proxy server
+time_t now = time(0);                                                                                                                                                                                                                            // Biến lưu trữ thời gian hiện tại
+vector<thread> threads;                                                                                                                                                                                                                          // Vector lưu trữ các thread
+HWND hwnd, hDrawbox, hTextbox3, hTextbox1, hTextbox2, hSearchBar, hButtonAdd, hButtonStart, hButtonStop, hButtonBan, hButtonUnban, hButtonRemove, hTextbox4, hSearchBar1, hSearchBar2, Log_label, performance, stat, ban_label, Trace, TraceBox; // Các control// Khai báo unordered_map để lưu các dòng đã được thêm vào
 // Khai báo unordered_map để lưu các dòng đã được thêm vào
 unordered_map<string, bool> addedStrings;
 string stringBan = ""; // Danh sách các trang web bị chặn
 stringstream output;
-vector<pair<string, string>> user_ban_list;                                           // Biến lưu trữ dữ liệu để ghi vào file server.txt
-int byteReceived = 0;                                                                 // Biến lưu trữ số byte nhận được
-int byteSent = 0;                                                                     // Biến lưu trữ số byte gửi đi
-int pivot = 0;                                                                        // Biến lưu trữ vị trí của dòng cuối cùng trong file server.txt
-vector<string> ban_list;                                                              // Danh sách các trang web bị chặn
-unordered_map<string, string> IPv4ConnectToDomain;                                    // Lưu trữ địa chỉ IP của domain
-int ClientOut = 0;                                                                    // Số client đã ngắt kết nối
+vector<pair<string, string>> user_ban_list;        // Biến lưu trữ dữ liệu để ghi vào file server.txt
+int byteReceived = 0;                              // Biến lưu trữ số byte nhận được
+int byteSent = 0;                                  // Biến lưu trữ số byte gửi đi
+int pivot = 0;                                     // Biến lưu trữ vị trí của dòng cuối cùng trong file server.txt
+vector<string> ban_list;                           // Danh sách các trang web bị chặn
+unordered_map<string, string> IPv4ConnectToDomain; // Lưu trữ địa chỉ IP của domain
+
+int ClientOut = 0;
+set<string> user_list;                                                                // Số client đã ngắt kết nối
 SOCKET proxySocket;                                                                   // Socket của proxy server
 deque<int> DataDisplayQueue = {12354, 50463, 24653, 42361, 62346, 10350, 2314, 5493}; // Queue lưu trữ số byte nhận được và gửi đi
 int maxData = 1000;
 RECT rect_drawbox;
+
+struct INFO {
+    string domain;
+    string client_ip;
+    string time_connect;
+};
+vector<INFO> info;
 
 void relayData(SOCKET srcSocket, SOCKET destSocket) { // Hàm chuyển dữ liệu từ srcSocket sang destSocket
     char buffer[BUFFER_SIZE];                         // buffer dùng để chứa dữ liệu
@@ -79,17 +89,16 @@ void printReceivedAndSentBytes() {
 }
 void printGraph() {
     // Perform calculations or data preparation here
-    while(FLAG) {
-        Sleep(2000); // Simulate some work
-        cout << "Print graph" << endl;
-    // Send a message to the main thread to trigger a GUI update
+    while (FLAG) {
+        Sleep(1000); // Simulate some work
+        // cout << "Print graph" << endl;
+        // Send a message to the main thread to trigger a GUI update
         PostMessage(hwnd, WM_USER + 1, 0, 0); // WM_USER + 1 is a custom message
-    //Sleep(2000);
-        //Sleep(2000); // Simulate some work
-        //PostMessage(hwnd, WM_USER + 2, 0, 0); // WM_USER + 2 is a custom message
+        // Sleep(2000);
+        // Sleep(2000); // Simulate some work
+        // PostMessage(hwnd, WM_USER + 2, 0, 0); // WM_USER + 2 is a custom message
     }
 }
-
 
 bool bann(char *hostName) { // Hàm kiểm tra hostName có nằm trong danh sách ban_list không
     // Chuyển đổi char* sang string
@@ -112,24 +121,42 @@ bool ban_1_user(char *hostName, char *ip) {
 }
 
 void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu từ client
-    // if (user_ban_list.size() > 0)
-
-    //     cout << user_ban_list[0].first << " " << user_ban_list[0].second << endl;
+    if (info.size() == 0)
+        cout << "empty";
+    else {
+        for (auto e : info)
+            cout << e.domain << " " << e.client_ip << " " << e.time_connect << endl;
+    }
+    cout << "NUm client: " << user_list.size() << endl;
+    string CIP(ip);
     ofstream out("server.txt"); // Mở file server.txt để ghi dữ liệu
     char buffer[BUFFER_SIZE];   // buffer dùng để chứa dữ liệu
 
     int bytesRead = recv(clientSocket, buffer, sizeof(buffer) - 1, 0); // Đọc dữ liệu từ clientSocket
-    //---------------------------------------------------------
-    byteReceived += bytesRead;                              // Cập nhật số byte nhận được
-    if (bytesRead <= 0) {                                   // Nếu không đọc được dữ liệu
-        cerr << "Error reading from client socket" << endl; // In ra lỗi
+    byteReceived += bytesRead;                                         // Cập nhật số byte nhận được
+    if (bytesRead <= 0) {                                              // Nếu không đọc được dữ liệu
+        cerr << "Error reading from client socket" << endl;            // In ra lỗi
         closesocket(clientSocket);
+        user_list.erase(CIP);
         ClientOut++;
         return;
     }
     buffer[bytesRead] = '\0'; // Kết thúc chuỗi buffer
-    // cout << buffer << endl; // In ra dữ liệu đọc được
+    // char clientIP[INET_ADDRSTRLEN];
+    // // Lấy IP của client
+    // sockaddr_in clientAddr;
+    // int addrLen = sizeof(clientAddr);
+    // if (getpeername(clientSocket, (struct sockaddr *)&clientAddr, &addrLen) == 0) {
+    //     // Chuyển đổi IP từ dạng nhị phân sang dạng chuỗi
+    //     inet_ntop(AF_INET, &clientAddr.sin_addr, clientIP, sizeof(clientIP));
+    //     //cout << "Client IP: " << clientIP << endl; // In ra địa chỉ IP của client
+    // } else {
+    //     cerr << "Failed to get client IP" << endl;
+    // }
+    // string CIP(clientIP);
+    user_list.insert(CIP);
 
+    // Xử lý các dòng dữ liệu từ client
     std::istringstream stream(buffer);
     std::string line, connect_line, host_line, port;
     int line_number = 0;
@@ -150,9 +177,8 @@ void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu 
     }
 
     // Đưa kết quả về 1 văn bản (chuỗi)
-    std::string buff = connect_line + "\r\n"
-                                      "Host: " +
-                       host_line + "\r\n" + "----------------\r\n";
+    std::string buff = connect_line + "\r\n" +
+                       host_line + "\r\n" + "Client IP: " + CIP + "\r\n----------------\r\n";
 
     output << buff << endl;
     int length = output.str().size();
@@ -172,10 +198,18 @@ void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu 
     char method[16], url[256], protocol[16];           // Biến lưu trữ method, url, protocol
     sscanf(buffer, "%s %s %s", method, url, protocol); // Đọc method, url, protocol từ buffer
 
-    if (strcmp(method, "CONNECT") == 0) {                   // Nếu method là CONNECT
-        char hostname[256];                                 // Biến lưu trữ hostname
-        int port = 443;                                     // Cổng mặc định
-        sscanf(url, "%255[^:]:%d", hostname, &port);        // Đọc hostname và port từ url
+    if (strcmp(method, "CONNECT") == 0) {            // Nếu method là CONNECT
+        char hostname[256];                          // Biến lưu trữ hostname
+        int port = 443;                              // Cổng mặc định
+        sscanf(url, "%255[^:]:%d", hostname, &port); // Đọc hostname và port từ url
+        string host_string(hostname);
+        bool toAdd = true;
+        for (auto e : info) {
+            if (e.domain == host_string)
+                toAdd = false;
+        }
+        if (toAdd)
+            info.push_back({host_string, CIP, "NAN"});
         if (!bann(hostname) || !ban_1_user(hostname, ip)) { // Nếu hostname nằm trong danh sách ban_list
             const char *response = "HTTP/1.1 403 Forbidden\r\n"
                                    "Content-Type: text/html\r\n"
@@ -187,6 +221,7 @@ void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu 
             //---------------------------------------------------------
             byteSent += strlen(response); // Cập nhật số byte nhận được
             closesocket(clientSocket);
+            user_list.erase(CIP);
             ClientOut++;
             return;
         }
@@ -197,6 +232,7 @@ void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu 
         if (serverSocket == INVALID_SOCKET) {                  // Nếu không tạo được socket
             cerr << "Could not create server socket" << endl;
             closesocket(clientSocket);
+            user_list.erase(CIP);
             ClientOut++;
             return;
         }
@@ -205,6 +241,7 @@ void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu 
         if (host == nullptr) {                          // Nếu không lấy được thông tin host
             cerr << "Host resolution failed" << endl;
             closesocket(clientSocket);
+            user_list.erase(CIP);
             closesocket(serverSocket);
             ClientOut++;
             return;
@@ -218,6 +255,7 @@ void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu 
         if (connect(serverSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) { // Kết nối đến server
             cerr << "Connection to server failed" << endl;
             closesocket(clientSocket);
+            user_list.erase(CIP);
             closesocket(serverSocket);
             ClientOut++;
             return;
@@ -283,6 +321,7 @@ void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu 
         if (serverSocket == INVALID_SOCKET) {                  // Nếu không tạo được socket
             cerr << "Could not create server socket" << endl;
             closesocket(clientSocket);
+            user_list.erase(CIP);
             ClientOut++;
             return;
         }
@@ -291,6 +330,7 @@ void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu 
         if (host == nullptr) {                          // Nếu không lấy được thông tin host
             cerr << "Host resolution failed" << endl;
             closesocket(clientSocket);
+            user_list.erase(CIP);
             closesocket(serverSocket);
             ClientOut++;
             return;
@@ -304,6 +344,7 @@ void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu 
         if (connect(serverSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) { // Kết nối đến server
             cerr << "Connection to server failed" << endl;
             closesocket(clientSocket);
+            user_list.erase(CIP);
             closesocket(serverSocket);
             ClientOut++;
             return;
@@ -332,6 +373,7 @@ void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu 
         closesocket(serverSocket);
     }
     closesocket(clientSocket);
+    user_list.erase(CIP);
     ClientOut++;
 }
 int proxy_server() {
@@ -414,74 +456,74 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     static HWND hwndTextBox;
 
     switch (msg) {
-        case WM_DESTROY: {
-            PostQuitMessage(0);
-        } break;
+    case WM_DESTROY: {
+        PostQuitMessage(0);
+    } break;
 
         // case WM_USER+2: {
         // cout << "WM_USER+2 called" << endl;
         // InvalidateRect(hDrawbox, &rect_drawbox, TRUE);}
         // break;
-        
-        case WM_USER+1: {
-            std::cout << "WM_PAINT called" << std::endl;
-            PAINTSTRUCT ps;
-            HDC hds = BeginPaint(hDrawbox, &ps);
-            GetClientRect(hDrawbox, &rect_drawbox);
-            //Sleep(1000);
-            InvalidateRect(hDrawbox, &rect_drawbox, TRUE);
-            //cout << rect_drawbox.left << " " << rect_drawbox.top << " " << rect_drawbox.right << " " << rect_drawbox.bottom << endl;
-            // cout << rect.left << " " << rect.top << " " << rect.right << " " << rect.bottom << endl;
 
-            DataDisplayQueue.push_back(byteReceived);
-            if (DataDisplayQueue.size() > 10)
-                DataDisplayQueue.pop_front();
-            maxData = *max_element(DataDisplayQueue.begin(), DataDisplayQueue.end());
-            maxData = maxData == 0 ? 1000 : maxData;
-            maxData = maxData * 1.5;
-            // cout << "DataDisplayQueue: "; for (auto i : DataDisplayQueue) cout << i << " ";
-            HBRUSH hbrWhite = CreateSolidBrush(RGB(255, 255, 255));
-            FillRect(hds, &rect_drawbox, hbrWhite);
-            HPEN hPenAxis = CreatePen(PS_SOLID, 2, RGB(0, 0, 0));     // Black axes
-            HPEN hPenGrid = CreatePen(PS_DOT, 1, RGB(200, 200, 200)); // Light gray grid
-            HPEN hPenChart = CreatePen(PS_SOLID, 2, RGB(255, 0, 0));  // Red chart line
+    case WM_USER + 1: {
+        // std::cout << "WM_PAINT called" << std::endl;
+        PAINTSTRUCT ps;
+        HDC hds = BeginPaint(hDrawbox, &ps);
+        GetClientRect(hDrawbox, &rect_drawbox);
+        // Sleep(1000);
+        InvalidateRect(hDrawbox, &rect_drawbox, TRUE);
+        // cout << rect_drawbox.left << " " << rect_drawbox.top << " " << rect_drawbox.right << " " << rect_drawbox.bottom << endl;
+        //  cout << rect.left << " " << rect.top << " " << rect.right << " " << rect.bottom << endl;
 
-            // Select pens for drawing
-            SelectObject(hds, hPenAxis);
-            MoveToEx(hds, rect_drawbox.left, rect_drawbox.bottom, NULL);
-            LineTo(hds, rect_drawbox.right, rect_drawbox.bottom); // X-axis
-            MoveToEx(hds, rect_drawbox.left, rect_drawbox.bottom, NULL);
-            LineTo(hds, rect_drawbox.left, rect_drawbox.top); // X-axis
+        DataDisplayQueue.push_back(byteReceived);
+        if (DataDisplayQueue.size() > 10)
+            DataDisplayQueue.pop_front();
+        maxData = *max_element(DataDisplayQueue.begin(), DataDisplayQueue.end());
+        maxData = maxData == 0 ? 1000 : maxData;
+        maxData = maxData * 1.5;
+        // cout << "DataDisplayQueue: "; for (auto i : DataDisplayQueue) cout << i << " ";
+        HBRUSH hbrWhite = CreateSolidBrush(RGB(255, 255, 255));
+        FillRect(hds, &rect_drawbox, hbrWhite);
+        HPEN hPenAxis = CreatePen(PS_SOLID, 2, RGB(0, 0, 0));     // Black axes
+        HPEN hPenGrid = CreatePen(PS_DOT, 1, RGB(200, 200, 200)); // Light gray grid
+        HPEN hPenChart = CreatePen(PS_SOLID, 2, RGB(255, 0, 0));  // Red chart line
 
-            // Draw the grid
-            SelectObject(hds, hPenGrid);
-            for (int i = 0; i < 10; i++) {
-                MoveToEx(hds, rect_drawbox.left, rect_drawbox.bottom - i * (rect_drawbox.bottom - rect_drawbox.top) / 10, NULL);
-                LineTo(hds, rect_drawbox.right, rect_drawbox.bottom - i * (rect_drawbox.bottom - rect_drawbox.top) / 10); // Horizontal lines
-                MoveToEx(hds, rect_drawbox.left + i * (rect_drawbox.right - rect_drawbox.left) / 10, rect_drawbox.bottom, NULL);
-                LineTo(hds, rect_drawbox.left + i * (rect_drawbox.right - rect_drawbox.left) / 10, rect_drawbox.top); // Vertical lines
-            }
+        // Select pens for drawing
+        SelectObject(hds, hPenAxis);
+        MoveToEx(hds, rect_drawbox.left, rect_drawbox.bottom, NULL);
+        LineTo(hds, rect_drawbox.right, rect_drawbox.bottom); // X-axis
+        MoveToEx(hds, rect_drawbox.left, rect_drawbox.bottom, NULL);
+        LineTo(hds, rect_drawbox.left, rect_drawbox.top); // X-axis
 
-            // Draw the char
-            SelectObject(hds, hPenChart);
-            //cout << DataDisplayQueue.size() << endl;
-            for (int i = 1; i < DataDisplayQueue.size(); i++) {
-                //cout << DataDisplayQueue[i] << " ";
-                MoveToEx(hds, rect_drawbox.left + (i - 1) * (rect_drawbox.right - rect_drawbox.left) / 10, rect_drawbox.bottom - DataDisplayQueue[i - 1] * (rect_drawbox.bottom - rect_drawbox.top) / maxData, NULL);
-                LineTo(hds, rect_drawbox.left + i * (rect_drawbox.right - rect_drawbox.left) / 10, rect_drawbox.bottom - DataDisplayQueue[i] * (rect_drawbox.bottom - rect_drawbox.top) / maxData); // Chart line
-            }
+        // Draw the grid
+        SelectObject(hds, hPenGrid);
+        for (int i = 0; i < 10; i++) {
+            MoveToEx(hds, rect_drawbox.left, rect_drawbox.bottom - i * (rect_drawbox.bottom - rect_drawbox.top) / 10, NULL);
+            LineTo(hds, rect_drawbox.right, rect_drawbox.bottom - i * (rect_drawbox.bottom - rect_drawbox.top) / 10); // Horizontal lines
+            MoveToEx(hds, rect_drawbox.left + i * (rect_drawbox.right - rect_drawbox.left) / 10, rect_drawbox.bottom, NULL);
+            LineTo(hds, rect_drawbox.left + i * (rect_drawbox.right - rect_drawbox.left) / 10, rect_drawbox.top); // Vertical lines
+        }
 
-            //
+        // Draw the char
+        SelectObject(hds, hPenChart);
+        // cout << DataDisplayQueue.size() << endl;
+        for (int i = 1; i < DataDisplayQueue.size(); i++) {
+            // cout << DataDisplayQueue[i] << " ";
+            MoveToEx(hds, rect_drawbox.left + (i - 1) * (rect_drawbox.right - rect_drawbox.left) / 10, rect_drawbox.bottom - DataDisplayQueue[i - 1] * (rect_drawbox.bottom - rect_drawbox.top) / maxData, NULL);
+            LineTo(hds, rect_drawbox.left + i * (rect_drawbox.right - rect_drawbox.left) / 10, rect_drawbox.bottom - DataDisplayQueue[i] * (rect_drawbox.bottom - rect_drawbox.top) / maxData); // Chart line
+        }
 
-            DeleteObject(hbrWhite);
-            DeleteObject(hPenAxis);
-            DeleteObject(hPenGrid);
-            DeleteObject(hPenChart);
+        //
 
-            EndPaint(hDrawbox, &ps);
-            //ReleaseDC(hDrawbox, hds);
-           //InvalidateRect(hwnd, NULL, TRUE);
-        } break;
+        DeleteObject(hbrWhite);
+        DeleteObject(hPenAxis);
+        DeleteObject(hPenGrid);
+        DeleteObject(hPenChart);
+
+        EndPaint(hDrawbox, &ps);
+        // ReleaseDC(hDrawbox, hds);
+        // InvalidateRect(hwnd, NULL, TRUE);
+    } break;
 
     case WM_COMMAND: {
         // Kiểm tra nếu nút Add (ID của hButtonAdd) được nhấn
@@ -573,8 +615,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             wchar_t buffer1[256] = L"", buffer2[256] = L"";
             GetWindowTextW(hSearchBar1, buffer1, 256);
             GetWindowTextW(hSearchBar2, buffer2, 256);
-            cout << wcslen(buffer1) << endl
-                 << wcslen(buffer2) << endl;
+            // cout << wcslen(buffer1) << endl
+            //      << wcslen(buffer2) << endl;
             // Kiểm tra điều kiện: cả hai ô không rỗng
             if (wcslen(buffer1) > 0 && wcslen(buffer2) > 0) {
                 // Chuyển đổi từ wchar_t* sang std::string
@@ -636,8 +678,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             UpdateWindow(hTextbox2);
         }
         if ((HWND)lp == hButtonUnban) {
-            cout << HWND(lp) << endl;
-            // Lấy chỉ số mục được chọn trong ListBox
+            // cout << HWND(lp) << endl;
+            //  Lấy chỉ số mục được chọn trong ListBox
             int selectedIndex = (int)SendMessage(hTextbox2, LB_GETCURSEL, 0, 0);
 
             // Nếu không có mục nào được chọn
@@ -648,17 +690,17 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
             // Lấy chuỗi từ mục được chọn
             int textLen = SendMessage(hTextbox2, LB_GETTEXTLEN, selectedIndex, 0);
-            cout << textLen << endl;
+            // cout << textLen << endl;
             char *selectedText = new char[textLen + 1];
             SendMessage(hTextbox2, LB_GETTEXT, selectedIndex, (LPARAM)selectedText);
 
             // Xóa item đã chọn từ ListBox
-            if (LB_ERR == SendMessage(hTextbox2, LB_DELETESTRING, selectedIndex, 0) ) {
+            if (LB_ERR == SendMessage(hTextbox2, LB_DELETESTRING, selectedIndex, 0)) {
                 std::cout << "Error deleting item from ListBox!" << std::endl;
                 break;
             }
-           
-            //InvalidateRect(hTextbox2, NULL, TRUE);
+
+            // InvalidateRect(hTextbox2, NULL, TRUE);
             UpdateWindow(hTextbox2);
             string itemToRemove = selectedText;
             // Phân tách chuỗi
@@ -676,14 +718,14 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                         return p.first == part1 && p.second == part2;
                     }),
                 user_ban_list.end());
-            cout << "Ban: \n";
-            for (auto e : ban_list) {
-                cout << e << " ";
-            }
-            // cout<<"------------\n";
-            // for(auto e : user_ban_list){
-            //     cout<<e.first<<" "<<e.second<<endl;
+            // //cout << "Ban: \n";
+            // for (auto e : ban_list) {
+            //     cout << e << " ";
             // }
+            // // cout<<"------------\n";
+            // // for(auto e : user_ban_list){
+            // //     cout<<e.first<<" "<<e.second<<endl;
+            // // }
         }
 
     } break;
@@ -704,7 +746,7 @@ int main() {
 
     hwnd = CreateWindowW(
         g_szClassName, L"Window with Textboxes and Buttons", WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 1040, 700, NULL, NULL, wc.hInstance, NULL);
+        CW_USEDEFAULT, CW_USEDEFAULT, 1300, 700, NULL, NULL, wc.hInstance, NULL);
 
     if (hwnd == NULL) {
         return 0;
@@ -726,13 +768,17 @@ int main() {
                               2 * margin + 400, 2 * margin + 230 + 50, 325, 220, hwnd, (HMENU)3, wc.hInstance, NULL);
     hTextbox4 = CreateWindowW(L"EDIT", L"",
                               WS_CHILD | WS_VISIBLE | WS_BORDER | ES_MULTILINE | WS_VSCROLL | ES_READONLY,
-                              800 - margin, margin + 50, 200, 150, hwnd, (HMENU)3, wc.hInstance, NULL);
+                              800 - margin, margin + 50, 325, 240 - 50, hwnd, (HMENU)3, wc.hInstance, NULL);
     // hTextbox3 = CreateWindowW(L"LISTBOX", L"",
     //                           WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_STANDARD | WS_VSCROLL,
     //                           810 - margin, margin + 200, 200, 300, hwnd, (HMENU)3, wc.hInstance, NULL);
     hDrawbox = CreateWindowW(L"STATIC", L"",
                              WS_CHILD | WS_VISIBLE,
                              2 * margin + 400, margin + 50, 325, 240 - 50, hwnd, (HMENU)3, wc.hInstance, NULL);
+
+    TraceBox = CreateWindowW(L"EDIT", L"",
+                             WS_CHILD | WS_VISIBLE | WS_BORDER | ES_MULTILINE | WS_VSCROLL | ES_READONLY,
+                             800 - margin, 2 * margin + 230 + 50, 325, 320, hwnd, (HMENU)3, wc.hInstance, NULL);
 
     // Tạo thanh tìm kiếm ngang trên các nút
     int searchBarWidth = 300;
@@ -781,6 +827,10 @@ int main() {
                          WS_CHILD | WS_VISIBLE | SS_CENTER,
                          800 - margin, margin + 20, 50, 20, hwnd, NULL, wc.hInstance, NULL);
 
+    Trace = CreateWindowW(L"STATIC", L"Trace",
+                          WS_CHILD | WS_VISIBLE | SS_CENTER,
+                          800 - margin, margin + 50 + 220, 50, 20, hwnd, NULL, wc.hInstance, NULL);
+
     ban_label = CreateWindowW(L"STATIC", L"Ban",
                               WS_CHILD | WS_VISIBLE | SS_CENTER,
                               2 * margin + 400, margin + 50 + 220, 50, 20, hwnd, NULL, wc.hInstance, NULL);
@@ -789,20 +839,20 @@ int main() {
     HBRUSH hbrGray = CreateSolidBrush(RGB(211, 211, 211)); // Màu xám nhạt
     SetClassLongPtr(hwnd, GCLP_HBRBACKGROUND, (LONG_PTR)hbrGray);
 
-    ShowWindow(hwnd, SW_SHOW);  
+    ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
 
     // ClientOut++;
 
     MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0) > 0) 
-    if (msg.message != WM_PAINT){ 
-        if (msg.message == 1025) {
-            cout << "_______" << endl;
+    while (GetMessage(&msg, NULL, 0, 0) > 0)
+        if (msg.message != WM_PAINT) {
+            if (msg.message == 1025) {
+                // cout << "_______" << endl;
+            }
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
         }
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
 
     return 0;
 }
