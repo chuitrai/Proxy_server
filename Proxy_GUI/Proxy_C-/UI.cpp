@@ -3,6 +3,7 @@
 #include <ctime>
 #include <deque>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <set>
 #include <sstream>
@@ -120,14 +121,36 @@ bool ban_1_user(char *hostName, char *ip) {
     return true;
 }
 
-void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu từ client
-    if (info.size() == 0)
-        cout << "empty";
-    else {
-        for (auto e : info)
-            cout << e.domain << " " << e.client_ip << " " << e.time_connect << endl;
+void UpdateTraceBox() {
+    // Kiểm tra xem TraceBox có hợp lệ không
+    if (!TraceBox)
+        return;
+
+    // Tạo một chuỗi để lưu toàn bộ dữ liệu
+    std::ostringstream oss;
+
+    // Duyệt qua vector để định dạng dữ liệu
+    for (const auto &entry : info) {
+        oss << entry.domain << " " << entry.client_ip << "\r\n";
     }
-    cout << "NUm client: " << user_list.size() << endl;
+
+    // Lấy chuỗi định dạng
+    std::string result = oss.str();
+    // std::wstring result_w(result.begin(), result.end()); // Chuyển sang wchar_t nếu cần Unicode
+
+    // Xóa nội dung cũ và cập nhật nội dung mới
+    SendMessage(TraceBox, EM_SETSEL, 0, -1);
+    SendMessage(TraceBox, EM_REPLACESEL, FALSE, (LPARAM)result.c_str());
+}
+
+void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu từ client
+    // if (info.size() == 0)
+    //     cout << "empty";
+    // else {
+    //     for (auto e : info)
+    //         cout << e.domain << " " << e.client_ip << " " << e.time_connect << endl;
+    // }
+    cout << "Num client: " << user_list.size() << endl;
     string CIP(ip);
     ofstream out("server.txt"); // Mở file server.txt để ghi dữ liệu
     char buffer[BUFFER_SIZE];   // buffer dùng để chứa dữ liệu
@@ -205,11 +228,13 @@ void handleClient(SOCKET clientSocket, char *ip) { // Hàm xử lý dữ liệu 
         string host_string(hostname);
         bool toAdd = true;
         for (auto e : info) {
-            if (e.domain == host_string)
+            if (e.domain == host_string && e.client_ip == CIP)
                 toAdd = false;
         }
-        if (toAdd)
+        if (toAdd) {
             info.push_back({host_string, CIP, "NAN"});
+            UpdateTraceBox();
+        }
         if (!bann(hostname) || !ban_1_user(hostname, ip)) { // Nếu hostname nằm trong danh sách ban_list
             const char *response = "HTTP/1.1 403 Forbidden\r\n"
                                    "Content-Type: text/html\r\n"
@@ -435,7 +460,7 @@ int proxy_server() {
         char client_ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
         // std::cout << "CLient IPv4 " << client_ip << " and Port: " << ntohs(client_addr.sin_port) << "\n";
-        // cout << "Client accepted for connection from: " << clientSocket << endl;
+        //  cout << "Client accepted for connection from: " << clientSocket << endl;
         threads.emplace_back(handleClient, clientSocket, client_ip); // Tạo một thread để xử lý dữ liệu từ client
 
         // cerr << "Thread created\n";
@@ -615,8 +640,9 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             wchar_t buffer1[256] = L"", buffer2[256] = L"";
             GetWindowTextW(hSearchBar1, buffer1, 256);
             GetWindowTextW(hSearchBar2, buffer2, 256);
-            // cout << wcslen(buffer1) << endl
-            //      << wcslen(buffer2) << endl;
+            std::cout << wcslen(buffer1) << std::endl
+                      << wcslen(buffer2) << std::endl;
+
             // Kiểm tra điều kiện: cả hai ô không rỗng
             if (wcslen(buffer1) > 0 && wcslen(buffer2) > 0) {
                 // Chuyển đổi từ wchar_t* sang std::string
@@ -630,11 +656,25 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     // Nếu cặp chưa tồn tại, thêm vào user_ban_list
                     user_ban_list.emplace_back(str1, str2);
 
-                    // Tạo chuỗi định dạng "first                     second"
-                    std::string displayText = str1 + "              " + str2;
-
+                    // Tạo chuỗi định dạng với căn chỉnh
+                    // std::ostringstream oss;
+                    // oss << std::left << std::setw(30) << str1
+                    //     << std::right << std::setw(15) << str2;
+                    // std::string displayText = oss.str();
+                    // cout << displayText << endl;
+                    char displayText[51];
+                    displayText[50] = '\0';
+                    for (int i = 0; i <= 49; i++)
+                        displayText[i] = '.';
+                    for (int i = 0; i < str1.size(); i++)
+                        displayText[i] = str1[i];
+                    int tmp = str2.size()-1;
+                    for (int i = 49; i >=30 && tmp>=0; i--, tmp--){
+                        displayText[i] = str2[tmp];
+                    }
+                    cout<<displayText<<endl;
                     // Thêm chuỗi vào ListBox
-                    SendMessage(hTextbox2, LB_ADDSTRING, 0, (LPARAM)displayText.c_str());
+                    SendMessage(hTextbox2, LB_ADDSTRING, 0, (LPARAM)displayText);
 
                     // In ra thông báo đã thêm thành công (nếu cần)
                 } else {
@@ -653,8 +693,12 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     // Nếu cặp chưa tồn tại, thêm vào user_ban_list
                     user_ban_list.emplace_back(str1, str2);
                     ban_list.push_back(str1);
-                    // Tạo chuỗi định dạng "first                     all"
-                    std::string displayText = str1 + "              " + str2;
+
+                    // Tạo chuỗi định dạng với căn chỉnh
+                    std::ostringstream oss;
+                    oss << std::left << std::setw(35) << str1
+                        << std::right << std::setw(15) << str2;
+                    std::string displayText = oss.str();
 
                     // Thêm chuỗi vào ListBox
                     SendMessage(hTextbox2, LB_ADDSTRING, 0, (LPARAM)displayText.c_str());
@@ -677,6 +721,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             InvalidateRect(hTextbox2, NULL, TRUE);
             UpdateWindow(hTextbox2);
         }
+
         if ((HWND)lp == hButtonUnban) {
             // cout << HWND(lp) << endl;
             //  Lấy chỉ số mục được chọn trong ListBox
@@ -766,6 +811,7 @@ int main() {
     hTextbox2 = CreateWindowW(L"LISTBOX", L"",
                               WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_STANDARD | WS_VSCROLL,
                               2 * margin + 400, 2 * margin + 230 + 50, 325, 220, hwnd, (HMENU)3, wc.hInstance, NULL);
+
     hTextbox4 = CreateWindowW(L"EDIT", L"",
                               WS_CHILD | WS_VISIBLE | WS_BORDER | ES_MULTILINE | WS_VSCROLL | ES_READONLY,
                               800 - margin, margin + 50, 325, 240 - 50, hwnd, (HMENU)3, wc.hInstance, NULL);
