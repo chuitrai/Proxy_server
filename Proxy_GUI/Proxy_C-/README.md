@@ -1,1 +1,0 @@
-g++ -o tmp tmp.cpp -lgdi32
